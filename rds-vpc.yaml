@@ -1,0 +1,204 @@
+# Description: Appends RDS Instance to an Existing VPC Template
+# Revision: 1.2
+# Date: 2026-02-27
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC Infrastructure for jonwhi7739: 3 AZ span in us-west-2 with /23 subnets.'
+
+# Target Region: us-west-2 (Oregon)
+# This template follows a Declarative pattern for infrastructure repair and expansion.
+
+Parameters:
+  EnvironmentName:
+    Description: Environment name for resource tagging (e.g., QA).
+    Type: String
+    Default: QA
+
+  StudentID:
+    Description: Unique student ID used for naming.
+    Type: String
+    Default: jonwhi7739
+
+  VpcCIDR:
+    Description: CIDR block for the VPC.
+    Type: String
+    Default: 10.0.0.0/20
+
+Resources:
+  # VPC Core - Naming Convention: VPC-jonwhi7739
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      VPCSecurityGroups:
+      - <SECURITY-GROUP-ID>
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t3.micro
+      DBInstanceIdentifier: playground-db
+      Engine: MySQL
+      MasterUsername: Admin
+      MasterUserPassword: CloudAcademy123!
+
+  # Internet Gateway (Standard single IGW for the VPC)
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # --- Public Subnets (512 addresses each) ---
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock: 10.0.0.0/23
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Public-AZ-A
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2b
+      CidrBlock: 10.0.2.0/23
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Public-AZ-B
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2c
+      CidrBlock: 10.0.4.0/23
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Public-AZ-C
+
+  # --- Private Subnets (512 addresses each) ---
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2a
+      CidrBlock: 10.0.6.0/23
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Private-AZ-A
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2b
+      CidrBlock: 10.0.8.0/23
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Private-AZ-B
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: us-west-2c
+      CidrBlock: 10.0.10.0/23
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Private-AZ-C
+
+  # --- Routing Logic ---
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Public-Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Public Subnet Associations
+  PubSubAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PubSubAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PubSubAssoc3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+# Explicit Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub VPC-${StudentID}-Private-Routes
+
+  # Explicit Private Subnet Associations
+  PrivSubAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivSubAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivSubAssoc3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
+
+Outputs:
+  VpcID:
+    Description: The ID of the VPC
+    Value: !Ref VPC
+  PublicSubnets:
+    Description: List of Public Subnet IDs
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3 ] ]
+  PrivateSubnets:
+    Description: List of Private Subnet IDs
+    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3 ] ]
